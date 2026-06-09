@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <!-- スマホで正しく表示するための設定（拡大縮小を禁止し、画面いっぱいに表示） -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>ZINE WebAR</title>
+
+    <!--
+      ============================================================
+      ライブラリの読み込み
+      ============================================================
+      ・A-Frame      … 3D/AR空間を作るためのライブラリ
+      ・MindAR (image版) … 印刷した写真を認識するためのARライブラリ
+      ※インターネット接続があれば、下記CDNから自動で読み込まれます。
+    -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <style>
+      /* 画面いっぱいに表示し、余白やスクロールを消す */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      /*
+        「タップして開始」ボタンのスタイル。
+        モバイルブラウザでは、ユーザーが一度画面をタップしないと
+        音声付き動画を再生できないルール（Autoplayポリシー）があるため、
+        最初にこのボタンを表示して、タップしてもらいます。
+      */
+      #startOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.85);
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        text-align: center;
+        cursor: pointer;
+      }
+
+      #startOverlay h1 {
+        font-size: 1.4rem;
+        margin: 0 0 0.5rem;
+      }
+
+      #startOverlay p {
+        font-size: 0.95rem;
+        margin: 0.3rem 1.5rem;
+        line-height: 1.6;
+        opacity: 0.85;
+      }
+
+      #startButton {
+        margin-top: 1.5rem;
+        padding: 0.9rem 2.4rem;
+        font-size: 1.1rem;
+        border: none;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #000;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!--
+      ============================================================
+      スタート画面（タップして開始）
+      ============================================================
+      この画面をタップすると、カメラが起動してARが始まります。
+      （音声再生の許可を得るために必要な手順です）
+    -->
+    <div id="startOverlay">
+      <h1>ZINE WebAR</h1>
+      <p>ZINE（冊子）の写真にカメラをかざすと<br />当時の動画が再生されます。</p>
+      <p>はじめにカメラの使用を許可してください。</p>
+      <button id="startButton">タップして開始</button>
+    </div>
+
+    <!--
+      ============================================================
+      ARシーン本体
+      ============================================================
+      mindar-image の imageTargetSrc に、コンパイル済みのマーカーファイルを指定します。
+      ▼▼▼ マーカーファイルを変更したい場合はここを書き換えてください ▼▼▼
+        imageTargetSrc: ./target/target1.mind
+      ※ target1.mind は、ユーザーが用意する「コンパイル済みのARマーカーファイル」です。
+        （元になる写真 pic/picture1.jpeg を MindARのコンパイラで .mind に変換したもの）
+
+      ・autoStart: false … 起動タイミングを自分で制御するため、自動開始はオフにしています
+                          （「タップして開始」ボタンが押されてから開始します）
+      ・vr-mode-ui="enabled: false" … 不要なVRボタンなどのUIを非表示にします
+    -->
+    <a-scene
+      mindar-image="imageTargetSrc: ./target/target1.mind; autoStart: false; uiScanning: yes;"
+      color-space="sRGB"
+      embedded
+      renderer="colorManagement: true, physicallyCorrectLights"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false"
+    >
+      <!--
+        動画素材の置き場所。
+        マーカー（写真）ごとに1つずつ <video> を用意します。
+        ▼▼▼ 再生したい動画ファイルを変更したい場合は src を書き換えてください ▼▼▼
+          1つ目の写真 → ./mov/movie1.mp4 （id="zineVideo1"）
+          2つ目の写真 → ./mov/movie2.mp4 （id="zineVideo2"）
+        ※ movie1.mp4 / movie2.mp4 は、ユーザーが用意する「再生する動画ファイル」です。
+
+        【重要】モバイルのAutoplayポリシー対策のための属性：
+        ・playsinline / webkit-playsinline … 動画を全画面に切り替えず、その場で再生する
+        ・muted … 最初は「消音」にしておく（消音なら自動再生が許可されやすいため）
+                  → 写真を認識した瞬間に、JavaScriptで muted を解除して音を出します。
+        ・loop … 動画を繰り返し再生する（不要なら loop を削除してください）
+        ・preload="auto" … 動画をあらかじめ読み込んでおく
+      -->
+      <a-assets>
+        <video
+          id="zineVideo1"
+          src="./mov/movie1.mp4"
+          preload="auto"
+          loop
+          muted
+          playsinline
+          webkit-playsinline
+          crossorigin="anonymous"
+        ></video>
+        <video
+          id="zineVideo2"
+          src="./mov/movie2.mp4"
+          preload="auto"
+          loop
+          muted
+          playsinline
+          webkit-playsinline
+          crossorigin="anonymous"
+        ></video>
+      </a-assets>
+
+      <!-- ARで使うカメラ（ユーザーが操作する視点） -->
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <!--
+        マーカー（写真）を認識したときに、その上に表示する内容のまとまり。
+        mindar-image-target="targetIndex: N" は「.mindファイル内のN番目の画像」を意味します。
+        ・targetIndex: 0 → コンパイル時に1番目に登録した写真
+        ・targetIndex: 1 → コンパイル時に2番目に登録した写真
+        ※ 写真を増やしたい場合は、複数枚をまとめて1つの .mind にコンパイルし、
+          下記の <a-entity> を同じ要領でコピーして targetIndex を増やしてください。
+
+        各 <a-video> の data-video には、対応する動画素材のidを指定しています
+        （JavaScript側でこの値を見て再生する動画を切り替えます）。
+      -->
+
+      <!-- 1つ目の写真（targetIndex: 0）→ movie1.mp4 を再生 -->
+      <a-entity class="ar-target" mindar-image-target="targetIndex: 0">
+        <!--
+          写真の上にぴったり重ねて再生する動画。
+          ・src / data-video … 上で定義した動画素材(#zineVideo1)を指定
+          ・width / height … 動画のアスペクト比。要件どおり 4:3（1 : 0.75）に設定。
+                            動画の比率が16:9などの場合は、ここを調整してください
+                            （例：16:9なら width="1" height="0.5625"）
+          ・position="0 0 0" … マーカーの中心に配置
+          ・visible="false" … 最初は非表示。写真を認識したら表示します
+        -->
+        <a-video
+          class="ar-video"
+          src="#zineVideo1"
+          data-video="zineVideo1"
+          width="1"
+          height="0.75"
+          position="0 0 0"
+          rotation="0 0 0"
+          visible="false"
+        ></a-video>
+      </a-entity>
+
+      <!-- 2つ目の写真（targetIndex: 1）→ movie2.mp4 を再生 -->
+      <a-entity class="ar-target" mindar-image-target="targetIndex: 1">
+        <a-video
+          class="ar-video"
+          src="#zineVideo2"
+          data-video="zineVideo2"
+          width="1"
+          height="0.75"
+          position="0 0 0"
+          rotation="0 0 0"
+          visible="false"
+        ></a-video>
+      </a-entity>
+    </a-scene>
+
+    <script>
+      // =====================================================================
+      //  JavaScript：ARの起動制御 ＆ 動画の再生／停止ロジック
+      // =====================================================================
+
+      // ページ内の各要素を取得しておく
+      const startOverlay = document.querySelector("#startOverlay"); // スタート画面
+      const startButton = document.querySelector("#startButton"); // 開始ボタン
+      const sceneEl = document.querySelector("a-scene"); // ARシーン
+      const targetEntities = document.querySelectorAll(".ar-target"); // マーカーを認識する対象（複数）
+
+      // ---------------------------------------------------------------------
+      // 1. 「タップして開始」ボタンが押されたらARをスタートする
+      //    （ユーザーのタップを受けて起動することで、音声再生の許可が得られます）
+      // ---------------------------------------------------------------------
+      startButton.addEventListener("click", async () => {
+        try {
+          // MindARのシステムを取得して、カメラ＆画像認識を開始する
+          const mindarSystem = sceneEl.systems["mindar-image-system"];
+          await mindarSystem.start();
+
+          // 起動に成功したら、スタート画面を消す
+          startOverlay.style.display = "none";
+          console.log("[ZINE WebAR] ARを開始しました。写真にカメラをかざしてください。");
+        } catch (error) {
+          // カメラの許可が下りない、対応していない等のエラーはここで分かりやすく表示
+          console.error(
+            "[ZINE WebAR] ARの開始に失敗しました。カメラの使用が許可されているか確認してください。",
+            error
+          );
+          alert(
+            "カメラを起動できませんでした。\nブラウザのカメラ許可設定をご確認のうえ、もう一度お試しください。"
+          );
+        }
+      });
+
+      // ---------------------------------------------------------------------
+      // 2&3. 各マーカーに「認識」「ロスト」の処理を設定する
+      //     ・targetFound … 写真を認識 → その写真に対応する動画を表示・再生
+      //     ・targetLost  … 写真が外れた → 動画を一時停止・非表示
+      //     マーカーが増えても、このループがそれぞれに同じ処理を割り当てます。
+      // ---------------------------------------------------------------------
+      targetEntities.forEach((targetEntity, index) => {
+        // このマーカーに紐づく動画面(<a-video>)と動画素材(<video>)を取得する
+        const videoPlane = targetEntity.querySelector(".ar-video");
+        const videoId = videoPlane.getAttribute("data-video");
+        const videoEl = document.querySelector("#" + videoId);
+
+        // --- 写真を「認識した」とき ---
+        targetEntity.addEventListener("targetFound", () => {
+          console.log(`[ZINE WebAR] 写真${index + 1}を認識しました。動画を再生します。`);
+
+          // 動画面を表示する
+          videoPlane.setAttribute("visible", "true");
+
+          // 消音を解除して音声をオンにする（要件：muted = false）
+          videoEl.muted = false;
+
+          // 動画を再生する
+          const playPromise = videoEl.play();
+          if (playPromise !== undefined) {
+            playPromise.catch((error) => {
+              // まれに音声付き再生がブロックされた場合は、消音で再生だけは続行する
+              console.warn(
+                "[ZINE WebAR] 音声付きの再生がブロックされました。消音で再生を継続します。",
+                error
+              );
+              videoEl.muted = true;
+              videoEl.play();
+            });
+          }
+        });
+
+        // --- 写真がカメラから「外れた」とき ---
+        targetEntity.addEventListener("targetLost", () => {
+          console.log(`[ZINE WebAR] 写真${index + 1}が見えなくなりました。動画を一時停止します。`);
+
+          // 動画を一時停止する（要件：pause）
+          videoEl.pause();
+
+          // 動画面を非表示にする
+          videoPlane.setAttribute("visible", "false");
+
+          // 次に認識したときに、また消音状態から始まらないように消音へ戻しておく
+          videoEl.muted = true;
+        });
+      });
+
+      // ---------------------------------------------------------------------
+      // 4. その他：カメラやライブラリ関連のエラーをコンソールに出力する
+      // ---------------------------------------------------------------------
+      sceneEl.addEventListener("arError", (event) => {
+        console.error("[ZINE WebAR] ARエラーが発生しました。", event);
+      });
+    </script>
+  </body>
+</html>
