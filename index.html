@@ -101,16 +101,22 @@
       ============================================================
       mindar-image の imageTargetSrc に、コンパイル済みのマーカーファイルを指定します。
       ▼▼▼ マーカーファイルを変更したい場合はここを書き換えてください ▼▼▼
-        imageTargetSrc: ./target/target1.mind
-      ※ target1.mind は、ユーザーが用意する「コンパイル済みのARマーカーファイル」です。
-        （元になる写真 pic/picture1.jpeg を MindARのコンパイラで .mind に変換したもの）
+        imageTargetSrc: ./target/targets.mind
+      ※ targets.mind は、ユーザーが用意する「コンパイル済みのARマーカーファイル」です。
+      ※【重要】複数の写真を使う場合は、1枚ずつ別ファイルにせず、
+        写真をすべて “同時にアップロード” して1つの .mind にまとめてコンパイルしてください。
+        アップロードした順番が、下の targetIndex（0, 1, ...）に対応します。
+          1枚目にアップした写真 → targetIndex: 0 → movie1
+          2枚目にアップした写真 → targetIndex: 1 → movie2
+        （MindARは imageTargetSrc に1ファイルしか指定できないため、
+          target1.mind と target2.mind のように分けると2枚目は認識されません）
 
       ・autoStart: false … 起動タイミングを自分で制御するため、自動開始はオフにしています
                           （「タップして開始」ボタンが押されてから開始します）
       ・vr-mode-ui="enabled: false" … 不要なVRボタンなどのUIを非表示にします
     -->
     <a-scene
-      mindar-image="imageTargetSrc: ./target/target1.mind; autoStart: false; uiScanning: yes;"
+      mindar-image="imageTargetSrc: ./target/targets.mind; autoStart: false; uiScanning: yes;"
       color-space="sRGB"
       embedded
       renderer="colorManagement: true, physicallyCorrectLights"
