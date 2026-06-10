@@ -196,6 +196,10 @@
           position="0 0 0"
           rotation="0 0 0"
           visible="false"
+          material="transparent: true; opacity: 0"
+          scale="0.7 0.7 0.7"
+          animation__zoom="property: scale; from: 0.7 0.7 0.7; to: 1 1 1; dur: 600; easing: easeOutBack; startEvents: arshow"
+          animation__fade="property: material.opacity; from: 0; to: 1; dur: 600; easing: easeOutQuad; startEvents: arshow"
         ></a-video>
       </a-entity>
 
@@ -210,6 +214,10 @@
           position="0 0 0"
           rotation="0 0 0"
           visible="false"
+          material="transparent: true; opacity: 0"
+          scale="0.7 0.7 0.7"
+          animation__zoom="property: scale; from: 0.7 0.7 0.7; to: 1 1 1; dur: 600; easing: easeOutBack; startEvents: arshow"
+          animation__fade="property: material.opacity; from: 0; to: 1; dur: 600; easing: easeOutQuad; startEvents: arshow"
         ></a-video>
       </a-entity>
     </a-scene>
@@ -269,6 +277,11 @@
           // 動画面を表示する
           videoPlane.setAttribute("visible", "true");
 
+          // 登場アニメーション（フェードイン＋ズームアップ）を再生する。
+          // <a-video> に設定した animation__zoom / animation__fade が
+          // startEvents: arshow を待っているので、ここで "arshow" を発火させます。
+          videoPlane.emit("arshow");
+
           // 消音を解除して音声をオンにする（要件：muted = false）
           videoEl.muted = false;
 
@@ -296,6 +309,11 @@
 
           // 動画面を非表示にする
           videoPlane.setAttribute("visible", "false");
+
+          // 登場アニメーションを初期状態に戻しておく（次に認識したとき、
+          // また小さい＆透明の状態からアニメーションが始まるようにするため）
+          videoPlane.setAttribute("scale", "0.7 0.7 0.7");
+          videoPlane.setAttribute("material", "opacity", 0);
 
           // 次に認識したときに、また消音状態から始まらないように消音へ戻しておく
           videoEl.muted = true;
