@@ -97,6 +97,48 @@
 
     <!--
       ============================================================
+      動画素材の置き場所（画面には表示しない隠しコンテナ）
+      ============================================================
+      ▼▼▼ 再生したい動画ファイルを変更したい場合は src を書き換えてください ▼▼▼
+        1つ目の写真 → ./mov/movie1.mp4 （id="zineVideo1"）
+        2つ目の写真 → ./mov/movie2.mp4 （id="zineVideo2"）
+      ※ movie1.mp4 / movie2.mp4 は、ユーザーが用意する「再生する動画ファイル」です。
+
+      【重要】カメラ起動の安定化のため、動画は A-Frame の <a-assets> の外に置いています。
+        <a-assets> に入れると「動画を全部読み込むまでシーン（カメラ）が始まらない」ため、
+        大きな動画があるとカメラ起動が遅延・失敗しやすくなります。これを避ける構成です。
+
+      ・preload="none" … ページ表示時に動画を先読みしない（カメラ取得とリソースを奪い合わない）
+                         → 写真を認識したタイミングで初めて読み込み＆再生します
+      ・playsinline / webkit-playsinline … 動画を全画面にせず、その場で再生する
+      ・muted … 最初は「消音」。写真を認識した瞬間に JavaScript で音を出します
+      ・loop … 繰り返し再生（不要なら削除してください）
+    -->
+    <div style="position: absolute; width: 0; height: 0; overflow: hidden;" aria-hidden="true">
+      <video
+        id="zineVideo1"
+        src="./mov/movie1.mp4"
+        preload="none"
+        loop
+        muted
+        playsinline
+        webkit-playsinline
+        crossorigin="anonymous"
+      ></video>
+      <video
+        id="zineVideo2"
+        src="./mov/movie2.mp4"
+        preload="none"
+        loop
+        muted
+        playsinline
+        webkit-playsinline
+        crossorigin="anonymous"
+      ></video>
+    </div>
+
+    <!--
+      ============================================================
       ARシーン本体
       ============================================================
       mindar-image の imageTargetSrc に、コンパイル済みのマーカーファイルを指定します。
@@ -123,44 +165,6 @@
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
     >
-      <!--
-        動画素材の置き場所。
-        マーカー（写真）ごとに1つずつ <video> を用意します。
-        ▼▼▼ 再生したい動画ファイルを変更したい場合は src を書き換えてください ▼▼▼
-          1つ目の写真 → ./mov/movie1.mp4 （id="zineVideo1"）
-          2つ目の写真 → ./mov/movie2.mp4 （id="zineVideo2"）
-        ※ movie1.mp4 / movie2.mp4 は、ユーザーが用意する「再生する動画ファイル」です。
-
-        【重要】モバイルのAutoplayポリシー対策のための属性：
-        ・playsinline / webkit-playsinline … 動画を全画面に切り替えず、その場で再生する
-        ・muted … 最初は「消音」にしておく（消音なら自動再生が許可されやすいため）
-                  → 写真を認識した瞬間に、JavaScriptで muted を解除して音を出します。
-        ・loop … 動画を繰り返し再生する（不要なら loop を削除してください）
-        ・preload="auto" … 動画をあらかじめ読み込んでおく
-      -->
-      <a-assets>
-        <video
-          id="zineVideo1"
-          src="./mov/movie1.mp4"
-          preload="auto"
-          loop
-          muted
-          playsinline
-          webkit-playsinline
-          crossorigin="anonymous"
-        ></video>
-        <video
-          id="zineVideo2"
-          src="./mov/movie2.mp4"
-          preload="auto"
-          loop
-          muted
-          playsinline
-          webkit-playsinline
-          crossorigin="anonymous"
-        ></video>
-      </a-assets>
-
       <!-- ARで使うカメラ（ユーザーが操作する視点） -->
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
@@ -198,8 +202,8 @@
           visible="false"
           material="transparent: true; opacity: 0"
           scale="0.7 0.7 0.7"
-          animation__zoom="property: scale; from: 0.7 0.7 0.7; to: 1 1 1; dur: 600; easing: easeOutBack; startEvents: arshow"
-          animation__fade="property: material.opacity; from: 0; to: 1; dur: 600; easing: easeOutQuad; startEvents: arshow"
+          animation__zoom="property: scale; from: 0.7 0.7 0.7; to: 1 1 1; dur: 1000; easing: easeOutBack; startEvents: arshow"
+          animation__fade="property: material.opacity; from: 0; to: 1; dur: 1000; easing: easeOutQuad; startEvents: arshow"
         ></a-video>
       </a-entity>
 
@@ -236,25 +240,100 @@
       // ---------------------------------------------------------------------
       // 1. 「タップして開始」ボタンが押されたらARをスタートする
       //    （ユーザーのタップを受けて起動することで、音声再生の許可が得られます）
+      //
+      //    カメラ起動が不安定になりやすいので、次の4つの安定化対策を入れています：
+      //    (1) 動画の先読みを止める（HTML側 preload="none"）→ カメラ取得とリソースが競合しない
+      //    (2) ボタンの多重タップを防ぐ（start の同時呼び出しはカメラ取得失敗の原因）
+      //    (3) シーンの初期化完了を待ってから start を呼ぶ
+      //    (4) カメラ取得に失敗したら自動でリトライする
       // ---------------------------------------------------------------------
+
+      // 起動状態を管理するフラグ（多重起動・連打を防ぐため）
+      let isStarting = false; // 起動処理の実行中か
+      let isStarted = false; // すでに起動成功済みか
+
+      // 指定ミリ秒だけ待つための小さなヘルパー
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      // (3) A-Frameシーンの初期化完了を待つ
+      const waitForSceneReady = () =>
+        new Promise((resolve) => {
+          if (sceneEl.hasLoaded) {
+            resolve();
+          } else {
+            sceneEl.addEventListener("loaded", () => resolve(), { once: true });
+          }
+        });
+
+      // MindARシステムが使えるようになるまで待つ（最大 約5秒）
+      const waitForMindarSystem = async () => {
+        for (let i = 0; i < 50; i++) {
+          const system = sceneEl.systems["mindar-image-system"];
+          if (system) return system;
+          await wait(100);
+        }
+        throw new Error("MindARの初期化がタイムアウトしました。");
+      };
+
+      // (4) カメラ起動を最大3回までリトライする
+      const startWithRetry = async (maxAttempts = 3) => {
+        const mindarSystem = await waitForMindarSystem();
+        let lastError;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            console.log(`[ZINE WebAR] カメラ起動を試行します（${attempt}/${maxAttempts}回目）。`);
+            await mindarSystem.start();
+            return; // 成功したら終了
+          } catch (error) {
+            lastError = error;
+            console.warn(`[ZINE WebAR] ${attempt}回目の起動に失敗しました。`, error);
+            // 次の試行の前に、確保しかけたカメラを必ず解放しておく
+            try {
+              await mindarSystem.stop();
+            } catch (_) {
+              /* stop自体の失敗は無視してよい */
+            }
+            if (attempt < maxAttempts) await wait(600); // 少し待ってから再試行
+          }
+        }
+        throw lastError; // すべて失敗
+      };
+
       startButton.addEventListener("click", async () => {
+        // (2) 多重タップ・多重起動を防ぐ
+        if (isStarting || isStarted) return;
+        isStarting = true;
+        startButton.disabled = true;
+        startButton.textContent = "起動中…";
+
         try {
-          // MindARのシステムを取得して、カメラ＆画像認識を開始する
-          const mindarSystem = sceneEl.systems["mindar-image-system"];
-          await mindarSystem.start();
+          // (3) シーンの初期化を待ってから
+          await waitForSceneReady();
+          // (4) リトライ付きでカメラ＆画像認識を開始する
+          await startWithRetry(3);
 
           // 起動に成功したら、スタート画面を消す
+          isStarted = true;
           startOverlay.style.display = "none";
           console.log("[ZINE WebAR] ARを開始しました。写真にカメラをかざしてください。");
         } catch (error) {
-          // カメラの許可が下りない、対応していない等のエラーはここで分かりやすく表示
+          // 数回試しても失敗した場合は、分かりやすく案内して再挑戦できるようにする
           console.error(
             "[ZINE WebAR] ARの開始に失敗しました。カメラの使用が許可されているか確認してください。",
             error
           );
           alert(
-            "カメラを起動できませんでした。\nブラウザのカメラ許可設定をご確認のうえ、もう一度お試しください。"
+            "カメラを起動できませんでした。\n" +
+              "・URLが https:// で始まっているか\n" +
+              "・カメラの使用が「許可」になっているか\n" +
+              "・他のアプリ/タブがカメラを使っていないか\n" +
+              "を確認して、もう一度ボタンを押してください。"
           );
+          // 再挑戦できるよう、ボタンを元に戻す
+          startButton.disabled = false;
+          startButton.textContent = "もう一度試す";
+        } finally {
+          isStarting = false;
         }
       });
 
